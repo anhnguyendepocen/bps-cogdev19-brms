@@ -2,7 +2,7 @@ All materials and information for this workshop on `brms` will be made available
 
 # Software
 
-The required software for these workshops are all free and open source
+The required software for this workshop is all free and open source
 and will run identically on Windows, Mac OS X, and Linux platforms.
 
 There are six main pieces of software to install:

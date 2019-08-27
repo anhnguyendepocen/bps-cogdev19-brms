@@ -1,3 +1,5 @@
+All materials and information for this workshop on `brms` will be made available in this repository.
+
 # Software
 
 The required software for these workshops are all free and open source

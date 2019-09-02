@@ -1,4 +1,14 @@
-All materials and information for this workshop on `brms` will be made available in this repository.
+All materials and information for this workshop on `brms` are available in this repository.
+
+They can be downloaded with this zip archive: <https://github.com/mark-andrews/bps-cogdev19-brms/archive/master.zip>
+
+# Schedule
+
+* 10:30-11:00 Introduction to brms
+* 11:00-12:30 Linear models
+* 13:30-14:30 Generalized linear models
+* 14:30-14:45 Break
+* 14:45-17:00 Multilevel models
 
 # Software
 

@@ -1,0 +1,346 @@
+---
+title: "Bayesian Regression using `brms`^[These slides are not intended to be self-contained and comprehensive, but just aim to provide some of the workshop's content. Elaborations and explanations will be provided in the workshop itself.]"
+author: |
+  | Mark Andrews
+  | Psychology Department, Nottingham Trent University
+  |   
+  | \faTwitter\ ```@xmjandrews```
+  | \faEnvelopeO\  ```mark.andrews@ntu.ac.uk```
+  | \faGithub\ ```https://github.com/mark-andrews/bps-cogdev19-brms```
+fontsize: 10pt
+output:
+ beamer_presentation:
+  keep_tex: true
+  fonttheme: "serif"
+  includes:
+   in_header: slides_preamble.tex
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo = F, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+set.seed(42)
+
+```
+
+# Introduction
+
+* The R package `brms` is a easy to use but powerful tool for doing Bayesian regression.
+* It allows us to do general and generalized linear models and their multilevel counterparts, almost as easily as with `lm`, `glm`, `lmer`, etc.
+
+* It includes far more probability models for outcome variables than almost all other regression packages: gaussian, student, binomial, bernoulli, poisson, negbinomial, geometric, Gamma, skew_normal, lognormal, shifted_lognormal, exgaussian, wiener, inverse.gaussian, exponential, weibull, frechet, Beta, von_mises, asym_laplace, gen_extreme_value, categorical, cumulative, cratio, sratio, acat, hurdle_poisson, hurdle_negbinomial, hurdle_gamma, hurdle_lognormal, zero_inflated_binomial, zero_inflated_beta, zero_inflated_negbinomial, zero_inflated_poisson, and zero_one_inflated_beta.
+
+* It also allows for censored data, missing data, measurment error, nonlinear regression, probabilistic mixture models, *distributional* models (whereby all parameters of the outcome variables have predictors), and so on.
+
+# Disclaimer
+
+There are some major topics that we can not cover in depth:
+
+  * The nature of Bayesian data analysis
+  * The what, why, and how of Markov Chain Monte Carlo
+  * The what, why, and how of probabilistic programming languages
+
+# The how and why of \brms
+
+* \brms writes Stan and Stan writes and compiles a \mcmc sampler.
+* To understand this process and its importance better, we must appreciate the following:
+  1. Bayes is best. No further discussion necessary.
+  1. Doing Bayesian data analysis, except for when using a prohibitively small set of models, 
+     requires Markov Chain Monte Carlo (\mcmc) samplers.
+  1. Writing your own \mcmc is either hard or very hard.
+  1. Probabilistic programming languages like Stan essentially write your \mcmc sampler      for any model you programmatically define. 
+  1. Although probabilistic programming languages reduce down the time and effort to 
+     obtain your sampler by orders of magnitude, they *still* require considerable time and 
+     effort relative to writing a single R command.
+* \brms allows you to write your Bayesian model (with some restrictions) using standard R regression commands.
+
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, prompt = TRUE, warning = FALSE, message = FALSE, comment='#>')
+
+# Thanks to 
+# https://github.com/ramnathv/slidify/issues/189#issuecomment-15850008
+hook1 <- function(x){ gsub("```\n*```r*\n*", "", x) }
+hook2 <- function(x){ gsub("```\n+```\n", "", x) }
+knitr::knit_hooks$set(document = hook1)
+
+```
+
+# Load packages and data
+
+```{r}
+library(tidyverse)
+library(brms)
+library(modelr)
+library(lme4)
+library(magrittr)
+
+theme_set(theme_classic())
+
+# data
+weight_df <- read_csv('data/weight.csv')
+insul_df <- read_csv('data/insulation.csv')
+titanic_df <- read_csv('data/titanic.csv')
+sleep_df <- read_csv('data/sleepstudy.csv')
+science_df <- read_csv('data/science.csv')
+
+options(mc.cores = 2)
+#options(mc.cores = parallel::detectCores())
+```
+
+# Simple linear regression 
+
+```{r, cache=T, results='hide'}
+# classic 
+M_lm <- lm(weight ~ height, data = weight_df)
+
+# Bayesian 
+M_brm <- brm(weight ~ height, data = weight_df)
+```
+
+
+# Simple linear regression (cont'd)
+
+\scriptsize
+```{r}
+summary(M_brm)
+```
+\normalsize
+
+# Simple linear regression (cont'd)
+
+```{r, cache=T}
+# Overriding defaults
+M_brm <- brm(weight ~ height, 
+               data = weight_df,
+               cores = 2, # I have a dual-core
+               chains = 4, # 4 chains is typical
+               iter = 2500,
+               warmup = 1000, # initilization etc
+               # flat(ish) prior on coefs
+               prior = set_prior('normal(0, 100)'), 
+               seed = 101011 # for reproducibility
+)
+```
+
+# Plot the posterior distributions
+
+```{r}
+# plot just coefficients
+plot(M_brm, pars = '^b')
+
+#plot(M_brm) # for everything
+
+```
+
+# Plot posterior intervals
+```{r}
+stanplot(M_brm, type='hist', pars='^b')
+```
+
+## Posterior predictive checks
+
+```{r}
+pp_check(M_brm)
+```
+
+# Marginal plots
+
+```{r, eval=F}
+marginal_effects(M_brm)
+```
+
+
+# Posterior samples 
+```{r, eval=F}
+posterior_samples(M_brm)
+```
+
+# Get predictions
+```{r, eval=F}
+predict(M_brm)
+
+# predictions with new data
+tibble(height = c(160, 170, 180)) %>% 
+  add_predictions(M_brm)
+
+```
+
+# Get information on priors
+
+\scriptsize
+```{r}
+prior_summary(M_brm)
+```
+\normalsize
+
+# View the stan code
+
+```{r, eval=F}
+stancode(M_brm)
+```
+
+
+# Change priors
+```{r, cache=T}
+# Change priors 
+newpriors <- c(prior_string("student_t(3, 0, 10)", class = "b"),
+               prior_string("student_t(3, 18, 10)", class = "Intercept"),
+               prior_string("student_t(3, 0, 10)", class = "sigma"))
+
+M_brm <- brm(weight ~ height, 
+             data = weight_df,
+             cores = 2, 
+             chains = 4, 
+             iter = 2500,
+             warmup = 1000, 
+             prior = newpriors,
+             seed = 101011
+)
+```
+
+# Model comparison
+
+```{r, out.width='0.6\\textwidth'}
+ggplot(insul_df,
+       mapping = aes(x = Temp, y = Gas, col = Insul)
+) + geom_point() + stat_smooth(method = 'lm', se = F)
+```
+
+# Interaction linear model 
+
+```{r, cache=T}
+M_lm <- lm(Gas ~ Temp*Insul, data=insul_df)
+
+M_bayes <- brm(Gas ~ Temp*Insul, 
+               data = insul_df,
+               cores = 2, 
+               prior = set_prior('normal(0, 100)'), 
+               save_all_pars = T 
+)
+```
+
+# Additive model
+
+```{r, cache=T}
+# We'll do a model comparison comparing the above 
+# model to an additive, i.e. non-interaction, model
+
+M_lm_additive <- lm(Gas ~ Temp+Insul, data = insul_df)
+M_bayes_additive <- brm(Gas ~ Temp+Insul, 
+                        data = insul_df,
+                        cores = 2, 
+                        prior = set_prior('normal(0, 100)'), 
+                        save_all_pars = T 
+)
+```
+
+# Compare additive and interaction models (waic)
+
+```{r}
+waic(M_bayes_additive, M_bayes)
+```
+
+# Compare additive and interaction models (looic)
+
+```{r}
+loo(M_bayes_additive, M_bayes)
+```
+
+# Compare additive and interaction models (Bayes factor)
+
+```{r}
+bayes_factor(M_bayes_additive, M_bayes)
+```
+
+# Generalized linear models
+
+Binary logistic regression 
+```{r, cache=T}
+M_glm <- glm(survived ~ sex, 
+             data = titanic_df,
+             family=binomial)
+
+M_brm <- brm(survived ~ sex, 
+             data = titanic_df,
+             cores = 2, 
+             family = bernoulli(),
+             prior = set_prior('normal(0, 100)'), 
+             save_all_pars = T 
+)
+```
+
+# Multilevel linear models
+
+```{r, out.width='0.8\\textwidth'}
+ggplot(sleep_df,
+       aes(x=Days, y=Reaction, col=Subject)
+) + geom_point() +
+  stat_smooth(method='lm', se=F, size=0.5) +
+  facet_wrap(~Subject) +
+  theme_classic()
+```
+
+# Random intercepts
+
+```{r, cache=T}
+M_0_lmer <- lmer(Reaction ~ Days + (1|Subject),
+                 data = sleep_df)
+
+M_0_brm <- brm(Reaction ~ Days + (1|Subject),
+               cores = 2,               
+               prior = set_prior('normal(0, 100)'), # flat(ish) prior on coefs
+               save_all_pars = T,
+               data = sleep_df)
+```
+
+# Random intercepts and random slopes model
+```{r, cache=T}
+M_1_lmer <- lmer(Reaction ~ Days + (Days|Subject),
+                 data = sleep_df)
+
+M_1_brm <- brm(Reaction ~ Days + (Days|Subject),
+               cores = 2,               
+               prior = set_prior('normal(0, 100)'),  
+               save_all_pars = T,
+               data = sleep_df)
+```
+
+# Nested multilevel linear models
+
+```{r, cache=T}
+M_2_brm <- brm(like ~ sex + PrivPub + (1|school) + (1|Class), 
+               cores = 2,               
+               prior = set_prior('normal(0, 100)'),  
+               save_all_pars = T,
+               data = science_df)
+```
+
+# Ordinal logistic 
+
+```{r, cache=T}
+M_3_brm <- brm(like ~ sex + PrivPub + (1|school) + (1|Class),
+               cores = 2,
+               prior = set_prior('normal(0, 100)'), 
+               save_all_pars = T,
+               family=cumulative("logit"),
+               data = science_df)
+```
+
+
+# Multilevel logistic regression
+
+```{r, cache=T}
+sleep_df %<>% mutate(fast_rt = Reaction < median(Reaction))
+
+# consider using control = list(adapt_delta = 0.95)
+M_4_brm <- brm(fast_rt ~ Days + (Days|Subject),
+               family = bernoulli(),
+               cores = 2,               
+               prior = set_prior('normal(0, 100)'),  
+               save_all_pars = T,
+               data = sleep_df)
+```
+
+
